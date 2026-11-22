@@ -1,0 +1,60 @@
+@model List<UsuarioAdminViewModel>
+
+@{
+    ViewData["Title"] = "Administración de usuarios";
+}
+
+<h2>Administración de usuarios</h2>
+
+@if (TempData["Mensaje"] != null)
+{
+    <div class="alert alert-success">@TempData["Mensaje"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+            <th>Nombre</th>
+            <th>Correo</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Cambiar rol</th>
+            <th>Cuenta</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var u in Model)
+        {
+            <tr>
+                <td>@u.NombreCompleto</td>
+                <td>@u.Correo</td>
+                <td>@u.Rol</td>
+                <td>@(u.Habilitado ? "Habilitada" : "Deshabilitada")</td>
+                <td>
+                    <form asp-action="CambiarRol" method="post" class="d-flex gap-2">
+                        <input type="hidden" name="id" value="@u.Id" />
+                        <select name="rol" class="form-select form-select-sm">
+                            <option value="Cliente" selected="@(u.Rol == "Cliente")">Cliente</option>
+                            <option value="Administrador" selected="@(u.Rol == "Administrador")">Administrador</option>
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary">Guardar</button>
+                    </form>
+                </td>
+                <td>
+                    <form asp-action="CambiarEstado" method="post">
+                        <input type="hidden" name="id" value="@u.Id" />
+                        <input type="hidden" name="habilitar" value="@(u.Habilitado ? "false" : "true")" />
+                        <button type="submit" class="btn btn-sm @(u.Habilitado ? "btn-warning" : "btn-success")">
+                            @(u.Habilitado ? "Deshabilitar" : "Habilitar")
+                        </button>
+                    </form>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

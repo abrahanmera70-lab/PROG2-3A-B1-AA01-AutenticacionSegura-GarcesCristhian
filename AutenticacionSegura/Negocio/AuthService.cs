@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity;
 
 namespace AutenticacionSegura.Negocio;
 
-// Servicio de autenticación: contiene las reglas de registro, login, logout y recuperación
+// Reglas de negocio de autenticación: registro, login, logout y recuperación
 public class AuthService
 {
     private readonly UserManager<ApplicationUser> _userManager;
@@ -17,6 +17,7 @@ public class AuthService
         _signInManager = signInManager;
     }
 
+    // Registra al usuario y le asigna SIEMPRE el rol Cliente (el usuario no elige rol)
     public async Task<IdentityResult> RegistrarAsync(RegistroViewModel modelo)
     {
         var usuario = new ApplicationUser
@@ -26,33 +27,30 @@ public class AuthService
             NombreCompleto = modelo.NombreCompleto
         };
 
-        // Identity valida la política de contraseña y el correo único,
-        // y guarda la contraseña con hash
         var resultado = await _userManager.CreateAsync(usuario, modelo.Clave);
 
         if (resultado.Succeeded)
         {
-            // Todo usuario nuevo es Cliente. El registro público nunca crea Administradores
             await _userManager.AddToRoleAsync(usuario, "Cliente");
         }
 
         return resultado;
     }
 
-    public async Task<SignInResult> IniciarSesionAsync(LoginViewModel modelo)
+    // Inicia sesión (cookie). Cada intento fallido cuenta para el bloqueo.
+    public async Task<Microsoft.AspNetCore.Identity.SignInResult> IniciarSesionAsync(LoginViewModel modelo)
     {
-        // lockoutOnFailure: true cuenta los intentos fallidos y bloquea la cuenta
         return await _signInManager.PasswordSignInAsync(
             modelo.Correo, modelo.Clave, isPersistent: false, lockoutOnFailure: true);
     }
 
+    // Cierra la sesión y elimina la cookie
     public async Task CerrarSesionAsync()
     {
-        // Elimina la cookie de sesión
         await _signInManager.SignOutAsync();
     }
 
-    // Genera el token de recuperación. Devuelve null si el correo no existe
+    // Genera el token de recuperación. Devuelve null si el correo no existe.
     public async Task<string?> GenerarTokenRecuperacionAsync(string correo)
     {
         var usuario = await _userManager.FindByEmailAsync(correo);
@@ -65,15 +63,18 @@ public class AuthService
         return await _userManager.GeneratePasswordResetTokenAsync(usuario);
     }
 
-    // Cambia la contraseña si el token es válido, no ha caducado y no se ha usado
+    // Cambia la contraseña con el token (de un solo uso y con caducidad)
     public async Task<IdentityResult> RestablecerClaveAsync(RestablecerViewModel modelo)
     {
         var usuario = await _userManager.FindByEmailAsync(modelo.Correo);
 
         if (usuario == null)
         {
-            return IdentityResult.Failed(
-                new IdentityError { Description = "El enlace no es válido o ha caducado." });
+            // Mensaje genérico: no revela si el correo existe
+            return IdentityResult.Failed(new IdentityError
+            {
+                Description = "El enlace no es válido, ya fue usado o ha caducado."
+            });
         }
 
         return await _userManager.ResetPasswordAsync(usuario, modelo.Token, modelo.Clave);

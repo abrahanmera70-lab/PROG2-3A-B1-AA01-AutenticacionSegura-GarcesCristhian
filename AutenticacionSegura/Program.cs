@@ -1,16 +1,19 @@
 using AutenticacionSegura.Datos;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using AutenticacionSegura.Negocio;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. BASE DE DATOS: conecta la aplicación con SQL Server
-var cadenaConexion = builder.Configuration.GetConnectionString("DefaultConnection");
+// Capa de datos: conexión a SQL Server (sin credenciales en el código)
+var cadenaConexion = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Falta la cadena de conexión DefaultConnection.");
+
 builder.Services.AddDbContext<ApplicationDbContext>(opciones =>
     opciones.UseSqlServer(cadenaConexion));
 
-// 2. IDENTITY: usuarios, roles, hash de contraseñas y tokens
+// ASP.NET Core Identity: usuarios, roles, política de contraseña y bloqueo
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(opciones =>
 {
     // Política de contraseña
@@ -20,22 +23,27 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(opciones =>
     opciones.Password.RequireUppercase = true;
     opciones.Password.RequireNonAlphanumeric = true;
 
-    // El correo no se puede repetir
+    // Correo único
     opciones.User.RequireUniqueEmail = true;
 
-    // Bloqueo temporal: 3 intentos fallidos = 5 minutos bloqueado
+    // Bloqueo por intentos fallidos
     opciones.Lockout.AllowedForNewUsers = true;
     opciones.Lockout.MaxFailedAccessAttempts = 3;
     opciones.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
-.AddDefaultTokenProviders();
+.AddDefaultTokenProviders()
+.AddErrorDescriber<DescriptorErroresEs>();
 
-// 3. TOKENS de recuperación de contraseña: caducan en 30 minutos
+// Los tokens de recuperación caducan a los 30 minutos
 builder.Services.Configure<DataProtectionTokenProviderOptions>(opciones =>
     opciones.TokenLifespan = TimeSpan.FromMinutes(30));
 
-// 4. COOKIE de sesión
+// Revisa la sesión en cada petición: los cambios de rol o de estado se aplican de inmediato
+builder.Services.Configure<SecurityStampValidatorOptions>(opciones =>
+    opciones.ValidationInterval = TimeSpan.Zero);
+
+// Cookie de sesión
 builder.Services.ConfigureApplicationCookie(opciones =>
 {
     opciones.LoginPath = "/Account/Login";
@@ -43,21 +51,23 @@ builder.Services.ConfigureApplicationCookie(opciones =>
     opciones.Cookie.HttpOnly = true;
     opciones.ExpireTimeSpan = TimeSpan.FromMinutes(30);
     opciones.SlidingExpiration = true;
-
-    // En desarrollo acepta HTTP; en producción exige HTTPS (Secure)
     opciones.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
         ? CookieSecurePolicy.SameAsRequest
         : CookieSecurePolicy.Always;
 });
 
+// Capa de negocio
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<CorreoSimulado>();
 builder.Services.AddScoped<UsuarioService>();
-builder.Services.AddControllersWithViews();
+
+// Capa de presentación (antiforgery automático en todos los POST)
+builder.Services.AddControllersWithViews(opciones =>
+    opciones.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
 
 var app = builder.Build();
 
-// Crea roles y administrador inicial al arrancar
+// Crea los roles y el administrador inicial (seeding)
 using (var alcance = app.Services.CreateScope())
 {
     await DbInicializador.InicializarAsync(alcance.ServiceProvider, app.Configuration);
@@ -72,7 +82,6 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRouting();
 
-// El orden importa: primero identifica quién eres, luego qué puedes hacer
 app.UseAuthentication();
 app.UseAuthorization();
 

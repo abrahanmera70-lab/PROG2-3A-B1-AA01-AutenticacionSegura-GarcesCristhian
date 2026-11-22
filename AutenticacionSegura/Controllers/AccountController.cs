@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AutenticacionSegura.Controllers;
 
+// Capa de presentación: solo recibe peticiones y llama a la capa de negocio
 public class AccountController : Controller
 {
     private readonly AuthService _authService;
@@ -36,7 +37,7 @@ public class AccountController : Controller
 
         if (resultado.Succeeded)
         {
-            TempData["Mensaje"] = "Cuenta creada correctamente. Ya puedes iniciar sesión.";
+            TempData["Mensaje"] = "Registro exitoso. Ya puede iniciar sesión.";
             return RedirectToAction("Login");
         }
 
@@ -48,7 +49,7 @@ public class AccountController : Controller
         return View(modelo);
     }
 
-    // ---------- LOGIN ----------
+    // ---------- LOGIN / LOGOUT ----------
 
     [HttpGet]
     public IActionResult Login(string? returnUrl = null)
@@ -61,6 +62,8 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel modelo, string? returnUrl = null)
     {
+        ViewData["ReturnUrl"] = returnUrl;
+
         if (!ModelState.IsValid)
         {
             return View(modelo);
@@ -70,10 +73,10 @@ public class AccountController : Controller
 
         if (resultado.Succeeded)
         {
-            // Solo vuelve a direcciones de este mismo sitio (evita redirecciones a sitios externos)
+            // Solo redirige a direcciones del propio sitio (evita open redirect)
             if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
             {
-                return Redirect(returnUrl);
+                return LocalRedirect(returnUrl);
             }
 
             return RedirectToAction("Index", "AreaPersonal");
@@ -82,18 +85,16 @@ public class AccountController : Controller
         if (resultado.IsLockedOut)
         {
             ModelState.AddModelError(string.Empty,
-                "Cuenta bloqueada temporalmente por varios intentos fallidos. Intente de nuevo en unos minutos.");
+                "La cuenta está bloqueada o deshabilitada. Intente más tarde o contacte al administrador.");
         }
         else
         {
-            // Mensaje genérico: no revela si el correo existe o si falló la contraseña
+            // Mensaje genérico: no dice si falló el correo o la contraseña
             ModelState.AddModelError(string.Empty, "Correo o contraseña incorrectos.");
         }
 
         return View(modelo);
     }
-
-    // ---------- LOGOUT ----------
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -102,8 +103,6 @@ public class AccountController : Controller
         await _authService.CerrarSesionAsync();
         return RedirectToAction("Index", "Home");
     }
-
-    // ---------- ACCESO DENEGADO ----------
 
     [HttpGet]
     public IActionResult AccesoDenegado()
@@ -132,11 +131,10 @@ public class AccountController : Controller
 
         if (token != null)
         {
-            // Construye el enlace con el correo y el token
             var enlace = Url.Action("ResetPassword", "Account",
-                new { correo = modelo.Correo, token = token }, Request.Scheme);
+                new { correo = modelo.Correo, token }, Request.Scheme);
 
-            _correo.EnviarEnlaceRecuperacion(modelo.Correo, enlace!);
+            _correo.EnviarRecuperacion(modelo.Correo, enlace ?? string.Empty);
         }
 
         // Siempre la misma respuesta, exista o no el correo
@@ -152,12 +150,12 @@ public class AccountController : Controller
     [HttpGet]
     public IActionResult ResetPassword(string? correo, string? token)
     {
-        if (string.IsNullOrEmpty(correo) || string.IsNullOrEmpty(token))
+        var modelo = new RestablecerViewModel
         {
-            return RedirectToAction("Login");
-        }
+            Correo = correo ?? string.Empty,
+            Token = token ?? string.Empty
+        };
 
-        var modelo = new RestablecerViewModel { Correo = correo, Token = token };
         return View(modelo);
     }
 
