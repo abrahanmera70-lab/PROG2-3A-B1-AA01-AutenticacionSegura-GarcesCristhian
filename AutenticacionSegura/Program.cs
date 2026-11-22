@@ -51,6 +51,7 @@ builder.Services.ConfigureApplicationCookie(opciones =>
 });
 
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<CorreoSimulado>();
 builder.Services.AddControllersWithViews();
 
 var app = builder.Build();

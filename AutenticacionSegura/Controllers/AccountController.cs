@@ -7,10 +7,12 @@ namespace AutenticacionSegura.Controllers;
 public class AccountController : Controller
 {
     private readonly AuthService _authService;
+    private readonly CorreoSimulado _correo;
 
-    public AccountController(AuthService authService)
+    public AccountController(AuthService authService, CorreoSimulado correo)
     {
         _authService = authService;
+        _correo = correo;
     }
 
     // ---------- REGISTRO ----------
@@ -105,6 +107,86 @@ public class AccountController : Controller
 
     [HttpGet]
     public IActionResult AccesoDenegado()
+    {
+        return View();
+    }
+
+    // ---------- RECUPERACIÓN DE CONTRASEÑA ----------
+
+    [HttpGet]
+    public IActionResult ForgotPassword()
+    {
+        return View();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(OlvideClaveViewModel modelo)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(modelo);
+        }
+
+        var token = await _authService.GenerarTokenRecuperacionAsync(modelo.Correo);
+
+        if (token != null)
+        {
+            // Construye el enlace con el correo y el token
+            var enlace = Url.Action("ResetPassword", "Account",
+                new { correo = modelo.Correo, token = token }, Request.Scheme);
+
+            _correo.EnviarEnlaceRecuperacion(modelo.Correo, enlace!);
+        }
+
+        // Siempre la misma respuesta, exista o no el correo
+        return RedirectToAction("ForgotPasswordConfirmation");
+    }
+
+    [HttpGet]
+    public IActionResult ForgotPasswordConfirmation()
+    {
+        return View();
+    }
+
+    [HttpGet]
+    public IActionResult ResetPassword(string? correo, string? token)
+    {
+        if (string.IsNullOrEmpty(correo) || string.IsNullOrEmpty(token))
+        {
+            return RedirectToAction("Login");
+        }
+
+        var modelo = new RestablecerViewModel { Correo = correo, Token = token };
+        return View(modelo);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(RestablecerViewModel modelo)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(modelo);
+        }
+
+        var resultado = await _authService.RestablecerClaveAsync(modelo);
+
+        if (resultado.Succeeded)
+        {
+            return RedirectToAction("ResetPasswordConfirmation");
+        }
+
+        foreach (var error in resultado.Errors)
+        {
+            ModelState.AddModelError(string.Empty, error.Description);
+        }
+
+        return View(modelo);
+    }
+
+    [HttpGet]
+    public IActionResult ResetPasswordConfirmation()
     {
         return View();
     }
