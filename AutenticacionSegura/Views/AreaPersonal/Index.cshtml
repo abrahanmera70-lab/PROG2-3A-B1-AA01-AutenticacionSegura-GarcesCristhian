@@ -1,0 +1,7 @@
+@{
+    ViewData["Title"] = "Área personal";
+}
+
+<h2>Área personal</h2>
+<p>Bienvenido, <strong>@User.Identity?.Name</strong></p>
+<p>Rol: @(User.IsInRole("Administrador") ? "Administrador" : "Cliente")</p>

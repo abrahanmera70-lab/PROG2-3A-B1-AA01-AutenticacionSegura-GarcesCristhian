@@ -1,6 +1,7 @@
 using AutenticacionSegura.Datos;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using AutenticacionSegura.Negocio;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +50,7 @@ builder.Services.ConfigureApplicationCookie(opciones =>
         : CookieSecurePolicy.Always;
 });
 
+builder.Services.AddScoped<AuthService>();
 builder.Services.AddControllersWithViews();
 
 var app = builder.Build();
