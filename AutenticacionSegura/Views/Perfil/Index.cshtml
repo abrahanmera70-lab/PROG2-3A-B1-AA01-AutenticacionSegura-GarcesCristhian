@@ -1,0 +1,25 @@
+@model PerfilViewModel
+
+@{
+    ViewData["Title"] = "Mi perfil";
+}
+
+<h2>Mi perfil</h2>
+
+@if (TempData["Mensaje"] != null)
+{
+    <div class="alert alert-success">@TempData["Mensaje"]</div>
+}
+
+<dl class="row">
+    <dt class="col-sm-3">Nombre completo</dt>
+    <dd class="col-sm-9">@Model.NombreCompleto</dd>
+
+    <dt class="col-sm-3">Correo</dt>
+    <dd class="col-sm-9">@Model.Correo</dd>
+
+    <dt class="col-sm-3">Rol</dt>
+    <dd class="col-sm-9">@Model.Rol</dd>
+</dl>
+
+<a asp-action="CambiarClave" class="btn btn-primary">Cambiar contraseña</a>
